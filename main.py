@@ -1,6 +1,7 @@
 import pygame
 import sys
 import cv2
+import numpy as np
 
 def draw_start_button():
     pygame.draw.rect(screen, white, start_button)
@@ -63,8 +64,13 @@ bricks = [pygame.Rect(pos, (brick_width, brick_height)) for pos in bricks_pos]
 start_button = pygame.Rect(width // 2 - 100, height // 2, 200, 40)
 
 cap = cv2.VideoCapture(1)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 200)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 200)
+
+hand_cascade = cv2.CascadeClassifier('hand.xml')
+
+# OpenCV 윈도우 생성
+cv2.namedWindow("Hand Detection")
 
 started = False
 game_over = False
@@ -73,23 +79,20 @@ while True:
     if not ret:
         break
 
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    lower_color = (0, 50, 50)
-    upper_color = (20, 255, 255)
-    mask = cv2.inRange(hsv, lower_color, upper_color)
+    frame = cv2.flip(frame, 1)  # 1은 수평으로 반전합니다. 수직으로 반전하기 위해 -1을 사용할 수 있습니다.
 
-    left_most_x = None
-    for y in range(height):
-        for x in range(width):
-            if mask[y, x] > 0:
-                left_most_x = x
-                break
-        if left_most_x is not None:
-            break
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    hands = hand_cascade.detectMultiScale(gray, 1.3, 5)
 
-    if left_most_x is not None:
-        paddle_center = left_most_x - (paddle.width / 2)
-        paddle.left = int(paddle_center)
+    display_frame = frame.copy()
+
+    for (x, y, w, h) in hands:
+        paddle_center = x + (w // 2) - (paddle.width // 2)
+        # 패들 위치 범위로 제한
+        paddle.left = min(max(0, paddle_center), width - paddle.width)
+        cv2.rectangle(display_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+    cv2.imshow("Hand Detection", display_frame)
 
     if not started:
         if game_over:
@@ -123,7 +126,7 @@ while True:
 
     collided = ball.collidelist(bricks)
     if collided != -1:
-        brick_rect = bricks.pop(collided)
+        bricks.pop(collided)
         ball_speed = (ball_speed[0], -ball_speed[1])
 
     screen.fill(bg_color)
